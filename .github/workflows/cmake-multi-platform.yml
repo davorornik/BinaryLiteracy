@@ -1,0 +1,43 @@
+name: CMake Multi-Platform Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build-dir: build-ubuntu
+          - os: windows-latest
+            build-dir: build-windows
+          - os: macOS-latest
+            build-dir: build-macos
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up CMake
+      uses: lukka/get-cmake@v3.19.2
+
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{ matrix.build-dir }}
+
+    - name: Configure CMake
+      run: cmake -B ${{ matrix.build-dir }} -S . -DCMAKE_BUILD_TYPE=Release
+      working-directory: ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build ${{ matrix.build-dir }} --config Release -- -j 2
+      working-directory: ${{ github.workspace }}
+
+    - name: Run Catch2 Tests
+      run: ./${{ matrix.build-dir }}/BinaryLiteracy
+      working-directory: ${{ github.workspace }}
