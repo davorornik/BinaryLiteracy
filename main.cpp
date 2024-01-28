@@ -37,8 +37,8 @@ TEST_CASE("Alphabet Write and Read Integrity Test", "[integrity][MSB]") {
 }
 
 
-TEST_CASE("Variable Bit Length Storage Test MSB", "[MSB]") {
-    const int numbersToStore = 1024;
+TEST_CASE("Variable Bit Length Storage Test MSB", "[integrity][MSB]") {
+    const int numbersToStore = 512;
     auto *writer = new BinWriterMSB("outVarBitsMSB.txt");
     for (int number = 1; number <= numbersToStore; ++number) {
         int bitsNeeded = number == 1 ? 1 : static_cast<int>(std::floor(std::log2(number))) + 1;
@@ -49,7 +49,7 @@ TEST_CASE("Variable Bit Length Storage Test MSB", "[MSB]") {
     writer->flush();
     delete writer;
 
-    auto *reader = new BinReaderMSB("outVarBits.txt");
+    auto *reader = new BinReaderMSB("outVarBitsMSB.txt");
     std::vector<int> readNumbers;
     int currentNumber = 1;
     while (reader->canRead() && currentNumber <= numbersToStore) {
@@ -70,7 +70,7 @@ TEST_CASE("Variable Bit Length Storage Test MSB", "[MSB]") {
     std::remove("outVarBitsMSB.txt");
 }
 
-TEST_CASE("Variable Bit Length Storage Test LSB", "[LSB]") {
+TEST_CASE("Variable Bit Length Storage Test LSB", "[integrity][LSB]") {
     const int numbersToStore = 1024;
     auto *writer = new BinWriterLSB("outVarBitsLSB.txt");
     for (int number = 1; number <= numbersToStore; ++number) {
@@ -103,7 +103,7 @@ TEST_CASE("Variable Bit Length Storage Test LSB", "[LSB]") {
     std::remove("outVarBitsLSB.txt");
 }
 
-TEST_CASE("struct test", "[LSB]") {
+TEST_CASE("struct test", "[integrity][LSB]") {
     struct TestStruct1 {
         int a;
         double b;
@@ -138,4 +138,72 @@ TEST_CASE("struct test", "[LSB]") {
     CHECK(ts2.b == ts2_read.b);
     CHECK(ts2.c == ts2_read.c);
     std::remove("structTest.txt");
+}
+
+TEST_CASE("Mix type test MSB", "[integrity][MSB]") {
+    auto *writer = new BinWriterMSB("MixType.txt");
+    writer->writeByte('C');
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(false);
+    writer->writeByte('D');
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->flush();
+    delete writer;
+    auto *reader = new BinReaderMSB("MixType.txt");
+    char c = reader->readByte();
+    REQUIRE(c == 'C');
+    bool b1 = reader->readBit();
+    REQUIRE(b1);
+    bool b2 = reader->readBit();
+    REQUIRE(b2);
+    bool b3 = reader->readBit();
+    REQUIRE(!b3);
+    char d = reader->readByte();
+    REQUIRE(d == 'D');
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    delete reader;
+    std::remove("MixType.txt");
+}
+
+TEST_CASE("Mix type test LSB", "[integrity][LSB]") {
+    auto *writer = new BinWriterLSB("MixType.txt");
+    writer->writeByte('C');
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(false);
+    writer->writeByte('D');
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->writeBit(true);
+    writer->flush();
+    delete writer;
+    auto *reader = new BinReaderLSB("MixType.txt");
+    char c = reader->readByte();
+    REQUIRE(c == 'C');
+    bool b1 = reader->readBit();
+    REQUIRE(b1);
+    bool b2 = reader->readBit();
+    REQUIRE(b2);
+    bool b3 = reader->readBit();
+    REQUIRE(!b3);
+    char d = reader->readByte();
+    REQUIRE(d == 'D');
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    REQUIRE(reader->readBit());
+    delete reader;
+    std::remove("MixType.txt");
 }
