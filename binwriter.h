@@ -12,13 +12,13 @@
 template<const bool LSB = true, const std::streamsize buffer_size = 4096>
 class BinWriter {
 private:
-    std::ofstream file;
+    std::ofstream *file;
     char *buffer;
     std::streamsize index;
 
     bool tryUpdateBuffer() {
         if (index == buffer_size << 3) {
-            file.write(buffer, buffer_size);
+            file->write(buffer, buffer_size);
             index = 0;
             std::memset(buffer, 0, buffer_size);
             return true;
@@ -34,8 +34,9 @@ public:
         static_assert((buffer_size > 0) & !(buffer_size & (buffer_size - 1)),
                       "Template parameter must be a power of two.");
 
-        file.open(path, std::ios::binary | std::ios::out);
-        if (!file.is_open()) {
+        file = new std::ofstream();
+        file->open(path, std::ios::binary | std::ios::out);
+        if (!file->is_open()) {
             throw std::invalid_argument("file path? " + path);
         }
         buffer = new char[buffer_size];
@@ -45,14 +46,15 @@ public:
     virtual ~BinWriter() {
         flush();
         delete[] buffer;
-        file.close();
+        file->close();
+        delete file;
     }
 
-    [[maybe_unused]] bool canWrite() {
-        return file.is_open() && file.good();
+    bool canWrite() {
+        return file->is_open() && file->good();
     }
 
-    [[maybe_unused]] void writeBit(bool bit) {
+    void writeBit(bool bit) {
         tryUpdateBuffer();
         if (bit) {
             if (LSB) {
@@ -64,7 +66,7 @@ public:
         index++;
     }
 
-    [[maybe_unused]] void writeByte(char newByte) {
+    void writeByte(char newByte) {
         std::streamsize used = (index % 8);
         std::streamsize left = 8 - used;
         tryUpdateBuffer();
@@ -92,14 +94,24 @@ public:
         }
     }
 
+    // Ensure T is a POD type to prevent reading complex structures that might have dynamic memory or non-trivial constructors.
+    template<typename T>
+    typename std::enable_if<std::is_pod<T>::value, bool>::type writeStruct(T &result) {
+        if (!file->write(reinterpret_cast<char *>(&result), sizeof(T))) {
+            return false;
+        }
+        return true;
+    }
+
+
     void flush() {
         std::streamsize size = index >> 3;
         if (index % 8 != 0) {
             size++;
         }
-        file.write(buffer, size);
+        file->write(buffer, size);
         index = 0;
-        file.flush();
+        file->flush();
         std::memset(buffer, 0, buffer_size);
     }
 };

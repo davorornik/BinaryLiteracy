@@ -12,7 +12,7 @@
 template<const bool LSB = false, const std::streamsize buffer_size = 4096>
 class BinReader {
 private:
-    std::ifstream file;
+    std::ifstream *file;
     std::uintmax_t to_read;
     std::streamsize last_read;
     std::streamsize index;
@@ -24,7 +24,7 @@ private:
         if (index == last_read << 3) {
             index = 0;
             std::memset(buffer, 0, buffer_size);
-            last_read = file.read(buffer, buffer_size).gcount();
+            last_read = file->read(buffer, buffer_size).gcount();
             if (last_read == 0) {
                 eof = true;
             }
@@ -36,6 +36,23 @@ private:
 public:
     BinReader() = delete;
 
+    // Assuming that ofstream is oppened as std::ios:binnary and std::ios::in
+    explicit BinReader(std::ifstream &ifstream) :
+            last_read(0),
+            index(0),
+            lastBit(false),
+            eof(false) {
+        static_assert((buffer_size > 0) & !(buffer_size & (buffer_size - 1)),
+                      "Template parameter must be a power of two.");
+        file = &ifstream;
+        to_read = file->tellg();
+        file->seekg(0, std::ios::beg);
+        if (!file->is_open())
+            throw std::invalid_argument("file stream?");
+        buffer = new char[buffer_size];
+        std::memset(buffer, 0, buffer_size);
+    }
+
     explicit BinReader(const std::string &path) :
             last_read(0),
             index(0),
@@ -44,8 +61,9 @@ public:
         static_assert((buffer_size > 0) & !(buffer_size & (buffer_size - 1)),
                       "Template parameter must be a power of two.");
         to_read = std::filesystem::file_size(path);
-        file.open(path, std::ios::binary | std::ios::in);
-        if (!file.is_open())
+        file = new std::ifstream();
+        file->open(path, std::ios::binary | std::ios::in);
+        if (!file->is_open())
             throw std::invalid_argument("file path? " + path);
         buffer = new char[buffer_size];
         std::memset(buffer, 0, buffer_size);
@@ -53,10 +71,11 @@ public:
 
     virtual ~BinReader() {
         delete[] buffer;
-        file.close();
+        file->close();
+        delete file;
     }
 
-    [[maybe_unused]] bool canRead() const {
+    bool canRead() const {
         if (to_read > 0) {
             return true;
         } else {
@@ -64,7 +83,7 @@ public:
         }
     }
 
-    [[maybe_unused]] bool readBit() {
+    bool readBit() {
         tryUpdateBuffer();
         if (LSB) {
             lastBit = (buffer[index >> 3] >> (index % 8)) & 1;
@@ -75,7 +94,7 @@ public:
         return lastBit;
     }
 
-    [[maybe_unused]] char readByte() {
+    char readByte() {
         tryUpdateBuffer();
         std::streamsize used = index % 8;
         std::streamsize left = 8 - used;
@@ -112,7 +131,16 @@ public:
         return static_cast<char>(newByte);
     }
 
-    [[maybe_unused]] bool getLastBit() const {
+    // Ensure T is a POD type to prevent reading complex structures that might have dynamic memory or non-trivial constructors.
+    template<typename T>
+    typename std::enable_if<std::is_pod<T>::value, bool>::type readStruct(T &result) {
+        if (!file->read(reinterpret_cast<char *>(&result), sizeof(T))) {
+            return false;
+        }
+        return true;
+    }
+
+    bool getLastBit() const {
         return lastBit;
     }
 };
